@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { canManageChannels, ROLE_LABEL } from '../lib/roles'
@@ -9,11 +9,13 @@ import { Avatar, Icon, Logo, ServerIcon } from '../components/ui'
 import ChatView from '../components/ChatView'
 import MembersPanel from '../components/MembersPanel'
 import VoiceRoom from '../components/VoiceRoom'
+import SearchModal from '../components/SearchModal'
 import { VoiceSession } from '../lib/voice'
 import { ChannelModal, CreateServerModal, ProfileModal, ServerSettingsModal } from '../components/Modals'
 
 export default function Shell() {
   const { serverId, channelId } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const { user, profile } = useAuth()
 
@@ -329,6 +331,11 @@ export default function Shell() {
           <span className="online-count" title="Persone online ora">
             <span className="dot" /> {members.filter((m) => online.has(m.user_id)).length} online
           </span>
+          {server && (
+            <button className="icon-btn" onClick={() => setModal({ type: 'search' })} aria-label="Cerca nei messaggi" title="Cerca nei messaggi">
+              <Icon name="search" />
+            </button>
+          )}
           <button className={`icon-btn ${showMembers ? 'on' : ''}`} onClick={() => setShowMembers((v) => !v)} aria-label="Mostra membri" title="Membri">
             <Icon name="users" />
           </button>
@@ -357,7 +364,7 @@ export default function Shell() {
               onToggleMute={toggleMute}
             />
           ) : channel ? (
-            <ChatView key={channel.id} channel={channel} myRole={myRole} membersMap={membersMap} />
+            <ChatView key={channel.id} channel={channel} myRole={myRole} membersMap={membersMap} highlightId={location.state?.highlight} />
           ) : (
             <div className="empty-chat">
               <p className="muted">{channelsReady ? 'Scegli una sala.' : 'Caricamento…'}</p>
@@ -371,6 +378,13 @@ export default function Shell() {
 
       {modal?.type === 'createServer' && (
         <CreateServerModal onClose={() => setModal(null)} onCreated={async (sid) => { await loadServers(); navigate(`/s/${sid}`) }} />
+      )}
+      {modal?.type === 'search' && server && (
+        <SearchModal
+          server={server}
+          onClose={() => setModal(null)}
+          onOpen={(m) => { setModal(null); navigate(`/s/${server.id}/${m.channel_id}`, { state: { highlight: m.id, t: Date.now() } }) }}
+        />
       )}
       {modal?.type === 'profile' && <ProfileModal onClose={() => setModal(null)} onSaved={() => loadMembers(serverId)} />}
       {modal?.type === 'channel' && server && (

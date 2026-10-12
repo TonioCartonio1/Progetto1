@@ -10,7 +10,7 @@ import Message from './Message'
 
 const SELECT = '*, profiles(display_name, avatar_url)'
 
-export default function ChatView({ channel, myRole, membersMap }) {
+export default function ChatView({ channel, myRole, membersMap, highlightId }) {
   const { user } = useAuth()
   const [messages, setMessages] = useState(null)
   const [error, setError] = useState('')
@@ -72,6 +72,19 @@ export default function ChatView({ channel, myRole, membersMap }) {
     const el = listRef.current
     if (el && stickRef.current) el.scrollTop = el.scrollHeight
   }, [messages])
+
+  // arrivo da una ricerca: scorri fino al messaggio e fallo lampeggiare
+  const [flashId, setFlashId] = useState(null)
+  useEffect(() => {
+    if (!highlightId || !messages) return
+    const el = document.getElementById(`msg-${highlightId}`)
+    if (!el) return
+    stickRef.current = false
+    el.scrollIntoView({ block: 'center' })
+    setFlashId(highlightId)
+    const t = setTimeout(() => setFlashId(null), 2200)
+    return () => clearTimeout(t)
+  }, [highlightId, messages === null]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onScroll = () => {
     const el = listRef.current
@@ -182,6 +195,7 @@ export default function ChatView({ channel, myRole, membersMap }) {
               {newDay && <div className="day-sep"><span>{formatDay(m.created_at)}</span></div>}
               <Message
                 message={m}
+                flash={m.id === flashId}
                 grouped={grouped}
                 mine={m.user_id === user.id}
                 canDelete={m.user_id === user.id || moderator}

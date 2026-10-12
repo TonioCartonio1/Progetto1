@@ -3,12 +3,12 @@ import { formatBytes, formatTime } from '../lib/format'
 import { downloadParts, parseFilePath, saveBlob, signedUrl } from '../lib/upload'
 import { Avatar, Icon, ProgressBar } from './ui'
 
-export default function Message({ message: m, grouped, mine, canDelete, onEdit, onDelete }) {
+export default function Message({ message: m, grouped, mine, canDelete, onEdit, onDelete, flash }) {
   const [editing, setEditing] = useState(false)
   const name = m.profiles?.display_name || 'Utente'
 
   return (
-    <article className={`msg ${grouped ? 'grouped' : ''}`}>
+    <article id={`msg-${m.id}`} className={`msg ${grouped ? 'grouped' : ''} ${flash ? 'flash' : ''}`}>
       <div className="msg-gutter">
         {grouped ? (
           <time className="msg-hover-time">{formatTime(m.created_at)}</time>
