@@ -16,6 +16,8 @@ export default function ChatView({ channel, myRole, membersMap, highlightId }) {
   const { user, profile } = useAuth()
   const typing = useTyping(channel.id, user, profile)
   const [messages, setMessages] = useState(null)
+  const [reactions, setReactions] = useState({}) // id messaggio → { emoji: [id utenti] }
+  const [reactionsOn, setReactionsOn] = useState(false) // false se il database non ha ancora la tabella
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
   const [upload, setUpload] = useState(null) // { name, size, progress, abort }
@@ -62,13 +64,45 @@ export default function ChatView({ channel, myRole, membersMap, highlightId }) {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter }, ({ new: m }) => {
         setMessages((ms) => ms && ms.map((x) => (x.id === m.id ? { ...x, ...m, profiles: x.profiles } : x)))
       })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reactions', filter }, ({ new: r }) => {
+        setReactions((all) => addReaction(all, r))
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'reactions' }, ({ old: r }) => {
+        if (r?.message_id) setReactions((all) => removeReaction(all, r))
+      })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, ({ old }) => {
         setMessages((ms) => ms && ms.filter((x) => x.id !== old.id))
       })
       .subscribe()
 
+    // reazioni della sala (se il database non le ha ancora, il pulsante resta nascosto)
+    supabase
+      .from('reactions')
+      .select('message_id, user_id, emoji')
+      .eq('channel_id', channel.id)
+      .limit(5000)
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (error) { setReactionsOn(false); return }
+        setReactionsOn(true)
+        setReactions((data || []).reduce(addReaction, {}))
+      })
+
     return () => { alive = false; supabase.removeChannel(rt) }
   }, [channel.id, addMessage])
+
+  async function toggleReaction(messageId, emoji) {
+    const mine = reactions[messageId]?.[emoji]?.includes(user.id)
+    const r = { message_id: messageId, user_id: user.id, emoji }
+    setReactions((all) => (mine ? removeReaction(all, r) : addReaction(all, r)))
+    const { error } = mine
+      ? await supabase.from('reactions').delete().eq('message_id', messageId).eq('user_id', user.id).eq('emoji', emoji)
+      : await supabase.from('reactions').insert({ message_id: messageId, emoji })
+    if (error && !/duplicate key/i.test(error.message)) {
+      setReactions((all) => (mine ? addReaction(all, r) : removeReaction(all, r)))
+      setError(errorText(error))
+    }
+  }
 
   // scorrimento automatico in fondo
   useLayoutEffect(() => {
@@ -213,6 +247,9 @@ export default function ChatView({ channel, myRole, membersMap, highlightId }) {
                 flash={m.id === flashId}
                 mentioned={mentionsUser(m.content, user.id)}
                 membersMap={membersMap}
+                reactions={reactionsOn ? reactions[m.id] || {} : null}
+                onReact={(emoji) => toggleReaction(m.id, emoji)}
+                myId={user.id}
                 grouped={grouped}
                 mine={m.user_id === user.id}
                 canDelete={m.user_id === user.id || moderator}
@@ -367,7 +404,7 @@ function Composer({ channel, onSend, onFile, busy, membersMap, typing }) {
           rows={1}
           value={text}
           maxLength={3800}
-          placeholder={`Scrivi in #${channel.name} (usa @ per menzionare)`}
+          placeholder={window.innerWidth > 640 ? `Scrivi in #${channel.name} (usa @ per menzionare)` : `Scrivi in #${channel.name}`}
           onChange={(e) => {
             const v = e.target.value
             setText(v)
@@ -396,4 +433,23 @@ function Composer({ channel, onSend, onFile, busy, membersMap, typing }) {
       </div>
     </div>
   )
+}
+
+// ---------- piccole funzioni per le reazioni ----------
+function addReaction(all, r) {
+  const forMsg = { ...(all[r.message_id] || {}) }
+  const users = forMsg[r.emoji] || []
+  if (users.includes(r.user_id)) return all
+  forMsg[r.emoji] = [...users, r.user_id]
+  return { ...all, [r.message_id]: forMsg }
+}
+
+function removeReaction(all, r) {
+  const forMsg = all[r.message_id]
+  if (!forMsg?.[r.emoji]?.includes(r.user_id)) return all
+  const users = forMsg[r.emoji].filter((u) => u !== r.user_id)
+  const next = { ...forMsg }
+  if (users.length) next[r.emoji] = users
+  else delete next[r.emoji]
+  return { ...all, [r.message_id]: next }
 }

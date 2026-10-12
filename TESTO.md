@@ -31,6 +31,7 @@
 **Altro**
 - Si usa anche da telefono (menu a scomparsa).
 - **"Sta scrivendo…"** sotto la chat, in tempo reale (anche questo segnale rispetta le sale private).
+- **Reazioni** ai messaggi (👍 ❤️ 😂 😮 😢 🎉) che si aggiornano in diretta per tutti; passando sopra una reazione si vede chi l'ha messa.
 - Trascina un file nella chat, o incollalo, per caricarlo.
 - **Si installa come app** sul telefono e sul computer (icona sulla schermata Home, schermo intero), senza passare dagli store e senza costi.
 

@@ -352,6 +352,26 @@ video.attach-preview { width: 100%; max-height: 340px; }
 .toast-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--text-2); }
 .toast-body strong { color: var(--text); font-size: 14px; }
 
+/* ---------- reazioni ---------- */
+.reactions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.reaction { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-2); background: var(--bg-1); border: 1px solid var(--line); transition: background .12s, border-color .12s; }
+.reaction:hover { background: var(--bg-3); }
+.reaction.me { color: var(--accent-2); background: color-mix(in srgb, var(--accent) 14%, var(--bg-1)); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.reaction-emoji { font-size: 15px; line-height: 1; }
+.react-wrap { position: relative; display: inline-flex; }
+.emoji-picker {
+  position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 7; display: flex; gap: 2px; padding: 4px;
+  background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 30px -10px #000;
+}
+.emoji-picker button { width: 36px; height: 36px; border-radius: 9px; font-size: 20px; line-height: 1; transition: transform .1s, background .1s; }
+.emoji-picker button:hover { background: var(--bg-3); transform: scale(1.12); }
+.emoji-picker button.on { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.msg-actions.picking { display: flex; }
+.emoji-picker.down { bottom: auto; top: calc(100% + 6px); }
+@media (hover: none) {
+  .emoji-picker { left: 0; right: auto; }
+}
+
 /* ---------- ricerca ---------- */
 .search-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: min(60vh, 520px); overflow-y: auto; }
 .search-hit { width: 100%; display: flex; gap: 12px; padding: 10px; border-radius: 10px; text-align: left; }

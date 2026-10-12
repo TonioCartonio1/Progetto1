@@ -4,9 +4,13 @@ import { downloadParts, parseFilePath, saveBlob, signedUrl } from '../lib/upload
 import { Avatar, Icon, ProgressBar } from './ui'
 import { decodeMentions, encodeMentions, nameOf, splitMentions } from '../lib/mentions'
 
-export default function Message({ message: m, grouped, mine, canDelete, onEdit, onDelete, flash, mentioned, membersMap }) {
+export const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉']
+
+export default function Message({ message: m, grouped, mine, canDelete, onEdit, onDelete, flash, mentioned, membersMap, reactions, onReact, myId }) {
   const [editing, setEditing] = useState(false)
   const [open, setOpen] = useState(false) // su telefono: tocca il messaggio per vedere modifica/elimina
+  const [picker, setPicker] = useState(false) // false | 'up' | 'down'
+  const react = (e) => { onReact(e); setPicker(false); setOpen(false) }
   const name = m.profiles?.display_name || 'Utente'
 
   return (
@@ -53,10 +57,48 @@ export default function Message({ message: m, grouped, mine, canDelete, onEdit, 
           )
         )}
         {m.file_path && <Attachment message={m} />}
+        {reactions && Object.keys(reactions).length > 0 && (
+          <div className="reactions">
+            {EMOJIS.filter((e) => reactions[e]?.length).map((e) => {
+              const users = reactions[e]
+              const me = users.includes(myId)
+              const names = users.map((u) => (u === myId ? 'tu' : nameOf(membersMap, u))).join(', ')
+              return (
+                <button
+                  key={e}
+                  className={`reaction ${me ? 'me' : ''}`}
+                  onClick={() => onReact(e)}
+                  title={`${names}${me ? ' (clicca per togliere)' : ''}`}
+                  aria-pressed={me}
+                >
+                  <span className="reaction-emoji">{e}</span> {users.length}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
-      {!editing && (mine || canDelete) && (
-        <div className="msg-actions">
+      {!editing && (mine || canDelete || reactions) && (
+        <div className={`msg-actions ${picker ? 'picking' : ''}`}>
+          {reactions && (
+            <span className="react-wrap">
+              <button className="icon-btn small" title="Aggiungi una reazione" aria-expanded={picker} onClick={(e) => {
+                // vicino al bordo alto della chat il menu si apre verso il basso, per non finire nascosto
+                const top = e.currentTarget.getBoundingClientRect().top
+                setPicker((p) => (p ? false : top < 170 ? 'down' : 'up'))
+              }}>
+                <Icon name="smile" size={15} />
+              </button>
+              {picker && (
+                <span className={`emoji-picker ${picker}`} role="menu" onMouseLeave={() => setPicker(false)}>
+                  {EMOJIS.map((e) => (
+                    <button key={e} role="menuitem" className={reactions[e]?.includes(myId) ? 'on' : ''} onClick={() => react(e)} aria-label={`Reagisci con ${e}`}>{e}</button>
+                  ))}
+                </span>
+              )}
+            </span>
+          )}
           {mine && m.content !== undefined && (
             <button className="icon-btn small" title="Modifica" onClick={() => setEditing(true)}><Icon name="pencil" size={15} /></button>
           )}
