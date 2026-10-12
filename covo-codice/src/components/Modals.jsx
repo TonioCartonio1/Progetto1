@@ -81,7 +81,7 @@ export function CreateServerModal({ onClose, onCreated }) {
           <span>Nome del server</span>
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={50} required autoFocus />
         </label>
-        <p className="muted small">Partirai con tre sale: <b>#generale</b>, <b>#off-topic</b> e <b>🔒 staff</b> (privata per moderatori e admin).</p>
+        <p className="muted small">Partirai con <b>#generale</b>, <b>#off-topic</b>, <b>🔒 staff</b> (privata per moderatori e admin) e una sala <b>Vocale</b>.</p>
         {error && <div className="alert error">{error}</div>}
         <button className="btn primary block" disabled={busy}>{busy ? 'Creo…' : 'Crea server'}</button>
       </form>
@@ -163,10 +163,11 @@ export function ChannelModal({ server, channel, myRole, onClose, onDone }) {
   const editing = Boolean(channel)
   const [name, setName] = useState(channel?.name || '')
   const [privacy, setPrivacy] = useState(channel?.private_role || '')
+  const [kind, setKind] = useState(channel?.kind || 'text')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const options = PRIVACY_OPTIONS.filter((o) => !o.value || rank(myRole) >= rank(o.value))
-  const clean = (s) => s.trim().toLowerCase().replace(/\s+/g, '-').slice(0, 40)
+  const clean = (s) => (kind === 'voice' ? s.trim().replace(/\s+/g, ' ') : s.trim().toLowerCase().replace(/\s+/g, '-')).slice(0, 40)
 
   async function save(e) {
     e.preventDefault()
@@ -176,7 +177,7 @@ export function ChannelModal({ server, channel, myRole, onClose, onDone }) {
     const row = { name: n, private_role: privacy || null }
     const res = editing
       ? await supabase.from('channels').update(row).eq('id', channel.id).select().single()
-      : await supabase.from('channels').insert({ ...row, server_id: server.id }).select().single()
+      : await supabase.from('channels').insert({ ...row, server_id: server.id, ...(kind === 'voice' ? { kind } : {}) }).select().single()
     setBusy(false)
     if (res.error) return setError(errorText(res.error))
     onClose()
@@ -184,7 +185,7 @@ export function ChannelModal({ server, channel, myRole, onClose, onDone }) {
   }
 
   async function remove() {
-    if (!window.confirm(`Eliminare #${channel.name} e tutti i suoi messaggi?`)) return
+    if (!window.confirm(channel.kind === 'voice' ? `Eliminare la sala vocale ${channel.name}?` : `Eliminare #${channel.name} e tutti i suoi messaggi?`)) return
     setBusy(true)
     const { error } = await supabase.from('channels').delete().eq('id', channel.id)
     setBusy(false)
@@ -194,13 +195,26 @@ export function ChannelModal({ server, channel, myRole, onClose, onDone }) {
   }
 
   return (
-    <Modal title={editing ? `Modifica #${channel.name}` : 'Nuova sala'} onClose={onClose}>
+    <Modal title={editing ? `Modifica ${channel.kind === 'voice' ? '' : '#'}${channel.name}` : 'Nuova sala'} onClose={onClose}>
       <form onSubmit={save} className="stack">
+        {!editing && (
+          <div className="field">
+            <span>Tipo di sala</span>
+            <div className="segmented">
+              <button type="button" className={kind === 'text' ? 'on' : ''} onClick={() => setKind('text')}>
+                <Icon name="hash" size={15} /> Testo
+              </button>
+              <button type="button" className={kind === 'voice' ? 'on' : ''} onClick={() => setKind('voice')}>
+                <Icon name="volume" size={15} /> Vocale
+              </button>
+            </div>
+          </div>
+        )}
         <label className="field">
           <span>Nome della sala</span>
           <div className="input-prefix">
-            <Icon name={privacy ? 'lock' : 'hash'} size={16} />
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="nuova-sala" required autoFocus />
+            <Icon name={kind === 'voice' ? 'volume' : privacy ? 'lock' : 'hash'} size={16} />
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder={kind === 'voice' ? 'Chiacchiere' : 'nuova-sala'} required autoFocus />
           </div>
         </label>
         <label className="field">
@@ -209,7 +223,7 @@ export function ChannelModal({ server, channel, myRole, onClose, onDone }) {
             {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </label>
-        {privacy && <p className="muted small">I membri non vedranno questa sala né i suoi messaggi e file.</p>}
+        {privacy && <p className="muted small">I membri non vedranno questa sala{kind === 'voice' ? ' e non potranno entrarci.' : ' né i suoi messaggi e file.'}</p>}
         {error && <div className="alert error">{error}</div>}
         <button className="btn primary block" disabled={busy}>{editing ? 'Salva modifiche' : 'Crea sala'}</button>
         {editing && (

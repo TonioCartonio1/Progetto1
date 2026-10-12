@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -7,6 +7,8 @@ import { APP_NAME } from '../config'
 import { Avatar, Icon, Logo, ServerIcon } from '../components/ui'
 import ChatView from '../components/ChatView'
 import MembersPanel from '../components/MembersPanel'
+import VoiceRoom from '../components/VoiceRoom'
+import { VoiceSession } from '../lib/voice'
 import { ChannelModal, CreateServerModal, ProfileModal, ServerSettingsModal } from '../components/Modals'
 
 export default function Shell() {
@@ -17,10 +19,19 @@ export default function Shell() {
   const [servers, setServers] = useState(null)
   const [channelsState, setChannelsState] = useState({ serverId: null, list: [] })
   const [members, setMembers] = useState([])
-  const [online, setOnline] = useState(() => new Set())
+  const [presence, setPresence] = useState({}) // userId -> [{ since, voice }]
   const [modal, setModal] = useState(null) // {type, ...}
   const [navOpen, setNavOpen] = useState(false)
   const [showMembers, setShowMembers] = useState(() => window.innerWidth > 1100)
+
+  // sala vocale (resta attiva anche se cambi sala di testo)
+  const [voice, setVoice] = useState(null)              // stato della sessione
+  const [voiceChannelId, setVoiceChannelId] = useState(null)
+  const [voiceError, setVoiceError] = useState('')
+  const sessionRef = useRef(null)
+  const serverRtRef = useRef(null)
+  const voiceChannelRef = useRef(null)
+  voiceChannelRef.current = voiceChannelId
 
   // ---------- caricamento dati ----------
   const loadServers = useCallback(async () => {
@@ -67,12 +78,73 @@ export default function Shell() {
         loadServers()
         loadChannels(serverId) // un cambio di ruolo può mostrare/nascondere la sala privata
       })
-      .on('presence', { event: 'sync' }, () => setOnline(new Set(Object.keys(rt.presenceState()))))
+      .on('presence', { event: 'sync' }, () => setPresence({ ...rt.presenceState() }))
       .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') await rt.track({ since: Date.now() })
+        if (status === 'SUBSCRIBED') await rt.track({ since: Date.now(), voice: voiceChannelRef.current })
       })
-    return () => { supabase.removeChannel(rt) }
+    serverRtRef.current = rt
+    return () => { serverRtRef.current = null; supabase.removeChannel(rt); setPresence({}) }
   }, [serverId, user.id, loadChannels, loadMembers, loadServers])
+
+  // comunica agli altri in quale sala vocale sono (per mostrarlo nella lista)
+  useEffect(() => {
+    serverRtRef.current?.track({ since: Date.now(), voice: voiceChannelId }).catch?.(() => {})
+  }, [voiceChannelId])
+
+  const online = useMemo(() => new Set(Object.keys(presence)), [presence])
+  const voiceByChannel = useMemo(() => {
+    const out = {}
+    for (const [uid, metas] of Object.entries(presence)) {
+      const seen = new Set()
+      for (const m of metas) {
+        if (m.voice && !seen.has(m.voice)) {
+          seen.add(m.voice)
+          ;(out[m.voice] ||= []).push(uid)
+        }
+      }
+    }
+    return out
+  }, [presence])
+
+  // ---------- voce: entra / esci / microfono ----------
+  const leaveVoice = useCallback(() => {
+    const s = sessionRef.current
+    sessionRef.current = null
+    setVoice(null)
+    setVoiceChannelId(null)
+    s?.leave()
+  }, [])
+
+  const joinVoice = useCallback((ch) => {
+    if (sessionRef.current) leaveVoice()
+    setVoiceError('')
+    const session = new VoiceSession({
+      channelId: ch.id,
+      user,
+      profile,
+      onChange: (st) => {
+        if (sessionRef.current !== session) return
+        if (st.status === 'error') {
+          setVoiceError(st.error)
+          leaveVoice()
+          return
+        }
+        setVoice(st)
+      },
+    })
+    sessionRef.current = session
+    setVoiceChannelId(ch.id)
+    session.join()
+  }, [user, profile, leaveVoice])
+
+  const toggleMute = () => sessionRef.current?.setMuted(!sessionRef.current.muted)
+
+  // esci dalla voce se cambi server o chiudi la pagina
+  useEffect(() => () => leaveVoice(), [serverId, leaveVoice])
+  // se la sala vocale sparisce (eliminata o resa privata), esci
+  useEffect(() => {
+    if (voiceChannelId && channelsReady && !channels.some((c) => c.id === voiceChannelId)) leaveVoice()
+  }, [voiceChannelId, channels, channelsReady, leaveVoice])
 
   // ---------- navigazione automatica ----------
   useEffect(() => {
@@ -83,7 +155,8 @@ export default function Shell() {
 
   useEffect(() => {
     if (!server || !channelsReady) return
-    if ((!channelId || !channel) && channels.length) navigate(`/s/${server.id}/${channels[0].id}`, { replace: true })
+    const first = channels.find((c) => c.kind !== 'voice') || channels[0]
+    if ((!channelId || !channel) && first) navigate(`/s/${server.id}/${first.id}`, { replace: true })
   }, [server, channelsReady, channelId, channel, channels, navigate])
 
   useEffect(() => { setNavOpen(false) }, [channelId])
@@ -161,8 +234,9 @@ export default function Shell() {
             {channels.map((c) => (
               <li key={c.id}>
                 <button className={`channel-item ${c.id === channelId ? 'active' : ''}`} onClick={() => goChannel(c)}>
-                  <Icon name={c.private_role ? 'lock' : 'hash'} size={17} />
+                  <Icon name={channelIcon(c)} size={17} />
                   <span className="channel-name">{c.name}</span>
+                  {c.kind === 'voice' && c.private_role && <Icon name="lock" size={13} className="muted" />}
                   {canManageChannels(myRole) && (
                     <span
                       className="channel-edit"
@@ -176,10 +250,42 @@ export default function Shell() {
                     </span>
                   )}
                 </button>
+                {c.kind === 'voice' && voiceByChannel[c.id]?.length > 0 && (
+                  <ul className="voice-people">
+                    {voiceByChannel[c.id].map((uid) => {
+                      const m = membersMap[uid]
+                      const speaking = voiceChannelId === c.id && voice?.participants.some((p) => p.userId === uid && p.speaking)
+                      return (
+                        <li key={uid} className={speaking ? 'speaking' : ''}>
+                          <Avatar id={uid} name={m?.profiles?.display_name} url={m?.profiles?.avatar_url} size={22} />
+                          <span className="ellipsis">{m?.profiles?.display_name || 'Utente'}</span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </li>
             ))}
             {channelsReady && channels.length === 0 && <li className="muted small pad">Nessuna sala visibile.</li>}
           </ul>
+
+          {/* barra della voce, visibile ovunque mentre sei connesso */}
+          {voice && voiceChannelId && (
+            <div className="voice-bar">
+              <button className="voice-bar-info" onClick={() => navigate(`/s/${serverId}/${voiceChannelId}`)}>
+                <strong className={voice.status === 'connected' ? 'ok' : ''}>
+                  {voice.status === 'connected' ? 'Voce connessa' : 'Connessione…'}
+                </strong>
+                <small className="ellipsis">{channels.find((c) => c.id === voiceChannelId)?.name} · {voice.participants.length} {voice.participants.length === 1 ? 'persona' : 'persone'}</small>
+              </button>
+              <button className={`icon-btn ${voice.muted ? 'danger-on' : ''}`} onClick={toggleMute} title={voice.muted ? 'Riattiva microfono' : 'Silenzia microfono'}>
+                <Icon name={voice.muted ? 'micOff' : 'mic'} />
+              </button>
+              <button className="icon-btn danger" onClick={leaveVoice} title="Esci dalla voce">
+                <Icon name="phoneOff" />
+              </button>
+            </div>
+          )}
 
           {/* utente in basso */}
           <button className="me" onClick={() => setModal({ type: 'profile' })} title="Il tuo profilo">
@@ -200,7 +306,7 @@ export default function Shell() {
           </button>
           {channel && (
             <>
-              <Icon name={channel.private_role ? 'lock' : 'hash'} className="muted" />
+              <Icon name={channelIcon(channel)} className="muted" />
               <h1 className="topbar-title">{channel.name}</h1>
               {channel.private_role && (
                 <span className="tag">{channel.private_role === 'admin' ? 'Solo admin' : 'Staff'}</span>
@@ -217,7 +323,22 @@ export default function Shell() {
         </header>
 
         <div className="main-body">
-          {channel ? (
+          {channel?.kind === 'voice' ? (
+            <VoiceRoom
+              channel={channel}
+              voice={voiceChannelId === channel.id ? voice : null}
+              connectedElsewhere={Boolean(voiceChannelId && voiceChannelId !== channel.id)}
+              inRoom={(voiceByChannel[channel.id] || []).map((uid) => ({
+                userId: uid,
+                name: membersMap[uid]?.profiles?.display_name || 'Utente',
+                avatarUrl: membersMap[uid]?.profiles?.avatar_url,
+              }))}
+              error={voiceError}
+              onJoin={() => joinVoice(channel)}
+              onLeave={leaveVoice}
+              onToggleMute={toggleMute}
+            />
+          ) : channel ? (
             <ChatView key={channel.id} channel={channel} myRole={myRole} membersMap={membersMap} />
           ) : (
             <div className="empty-chat">
@@ -258,4 +379,9 @@ export default function Shell() {
       )}
     </div>
   )
+}
+
+function channelIcon(c) {
+  if (c.kind === 'voice') return 'volume'
+  return c.private_role ? 'lock' : 'hash'
 }

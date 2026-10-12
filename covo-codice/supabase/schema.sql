@@ -61,6 +61,12 @@ create table if not exists public.messages (
   check (content <> '' or file_path is not null)
 );
 
+-- Tipo di sala: 'text' (chat) o 'voice' (vocale)
+alter table public.channels add column if not exists kind text not null default 'text';
+do $$ begin
+  alter table public.channels add constraint channels_kind_check check (kind in ('text', 'voice'));
+exception when duplicate_object then null; end $$;
+
 create index if not exists messages_channel_time on public.messages (channel_id, created_at desc);
 create index if not exists channels_server on public.channels (server_id);
 create index if not exists members_user on public.server_members (user_id);
@@ -127,7 +133,7 @@ $$;
 -- AZIONI (chiamate dal sito)
 -- ---------------------------------------------------------------------
 
--- Crea un server: chi lo crea è admin, con 3 sale di partenza (1 privata)
+-- Crea un server: chi lo crea è admin, con 3 sale di testo (1 privata) e 1 sala vocale
 create or replace function public.create_server(p_name text, p_icon_url text default null)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare sid uuid;
@@ -137,6 +143,7 @@ begin
   insert into server_members (server_id, user_id, role) values (sid, auth.uid(), 'admin');
   insert into channels (server_id, name) values (sid, 'generale'), (sid, 'off-topic');
   insert into channels (server_id, name, private_role) values (sid, 'staff', 'moderator');
+  insert into channels (server_id, name, kind) values (sid, 'Vocale', 'voice');
   return sid;
 end; $$;
 
@@ -314,3 +321,27 @@ create policy "covo attachments select" on storage.objects for select to authent
     bucket_id = 'attachments'
     and public.can_view_channel(((storage.foldername(name))[1])::uuid)
   );
+
+-- ---------------------------------------------------------------------
+-- SALE VOCALI
+-- La voce viaggia direttamente tra i browser (WebRTC). Supabase fa solo da
+-- "centralino" su canali privati chiamati voice:<id sala>, e queste regole
+-- fanno entrare solo chi può vedere la sala (le sale private restano private).
+-- ---------------------------------------------------------------------
+create or replace function public.can_use_voice_topic(topic text)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+begin
+  if topic !~ '^voice:[0-9a-f-]{36}$' then return false; end if;
+  return exists (
+    select 1 from channels c
+    where c.id = split_part(topic, ':', 2)::uuid and c.kind = 'voice'
+  ) and can_view_channel(split_part(topic, ':', 2)::uuid);
+end; $$;
+
+drop policy if exists "conv voice read" on realtime.messages;
+create policy "conv voice read" on realtime.messages for select to authenticated
+  using (realtime.messages.extension in ('broadcast', 'presence') and public.can_use_voice_topic(realtime.topic()));
+
+drop policy if exists "conv voice write" on realtime.messages;
+create policy "conv voice write" on realtime.messages for insert to authenticated
+  with check (realtime.messages.extension in ('broadcast', 'presence') and public.can_use_voice_topic(realtime.topic()));
