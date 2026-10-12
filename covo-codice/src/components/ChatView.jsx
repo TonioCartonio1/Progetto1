@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { canModerate } from '../lib/roles'
 import { errorText, formatBytes, formatDay } from '../lib/format'
-import { uploadAttachment } from '../lib/upload'
+import { removeAttachment, uploadAttachment } from '../lib/upload'
 import { MAX_FILE_MB } from '../config'
 import { Icon, ProgressBar } from './ui'
 import Message from './Message'
@@ -104,6 +104,7 @@ export default function ChatView({ channel, myRole, membersMap }) {
     const { data, error } = await supabase.from('messages').delete().eq('id', m.id).select('id')
     if (error) return setError(errorText(error))
     if (!data?.length) return setError('Non hai il permesso di eliminare questo messaggio.')
+    removeAttachment(m.file_path)
     setMessages((ms) => ms.filter((x) => x.id !== m.id))
   }
 
@@ -135,7 +136,7 @@ export default function ChatView({ channel, myRole, membersMap }) {
         })
         .select(SELECT)
         .single()
-      if (error) throw error
+      if (error) { removeAttachment(path); throw error }
       addMessage(data)
     } catch (err) {
       if (!/abort/i.test(String(err?.message || err))) setError(errorText(err))

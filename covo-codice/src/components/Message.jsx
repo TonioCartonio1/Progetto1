@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatBytes, formatTime } from '../lib/format'
-import { signedUrl } from '../lib/upload'
-import { Avatar, Icon } from './ui'
+import { downloadParts, parseFilePath, saveBlob, signedUrl } from '../lib/upload'
+import { Avatar, Icon, ProgressBar } from './ui'
 
 export default function Message({ message: m, grouped, mine, canDelete, onEdit, onDelete }) {
   const [editing, setEditing] = useState(false)
@@ -84,10 +84,14 @@ function EditBox({ initial, onSave, onCancel }) {
 }
 
 function Attachment({ message: m }) {
-  const isImage = m.file_type?.startsWith('image/')
-  const isVideo = m.file_type?.startsWith('video/')
+  const { parted } = parseFilePath(m.file_path)
+  // i file divisi in pezzi non hanno anteprima (andrebbero scaricati tutti prima)
+  const isImage = !parted && m.file_type?.startsWith('image/')
+  const isVideo = !parted && m.file_type?.startsWith('video/')
   const [url, setUrl] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(null)
+  const [dlError, setDlError] = useState('')
 
   useEffect(() => {
     if (!isImage && !isVideo) return
@@ -98,7 +102,14 @@ function Attachment({ message: m }) {
 
   async function download() {
     setBusy(true)
+    setDlError('')
     try {
+      if (parted) {
+        setProgress(0)
+        const blob = await downloadParts(m.file_path, m.file_size, m.file_type, setProgress)
+        saveBlob(blob, m.file_name)
+        return
+      }
       const u = await signedUrl(m.file_path, m.file_name || true)
       const a = document.createElement('a')
       a.href = u
@@ -106,8 +117,11 @@ function Attachment({ message: m }) {
       document.body.appendChild(a)
       a.click()
       a.remove()
+    } catch (err) {
+      setDlError(err?.message || 'Download non riuscito.')
     } finally {
       setBusy(false)
+      setProgress(null)
     }
   }
 
@@ -123,7 +137,13 @@ function Attachment({ message: m }) {
         <Icon name="file" size={26} />
         <div className="file-meta">
           <strong className="ellipsis" title={m.file_name}>{m.file_name}</strong>
-          <span className="muted small">{formatBytes(m.file_size)}</span>
+          <span className="muted small">
+            {progress !== null
+              ? `Scarico… ${formatBytes(m.file_size * progress)} / ${formatBytes(m.file_size)}`
+              : formatBytes(m.file_size)}
+          </span>
+          {progress !== null && <ProgressBar value={progress} />}
+          {dlError && <span className="small" style={{ color: 'var(--danger)' }}>{dlError}</span>}
         </div>
         <button className="icon-btn" onClick={download} disabled={busy} title="Scarica">
           <Icon name="download" />

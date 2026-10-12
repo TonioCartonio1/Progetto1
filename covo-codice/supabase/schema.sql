@@ -356,6 +356,17 @@ drop policy if exists "conv voice write" on realtime.messages;
 create policy "conv voice write" on realtime.messages for insert to authenticated
   with check (realtime.messages.extension in ('broadcast', 'presence') and public.can_use_voice_topic(realtime.topic()));
 
+-- Chi ha caricato un file (o un moderatore) può cancellarlo
+drop policy if exists "conv attachments delete" on storage.objects;
+create policy "conv attachments delete" on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'attachments'
+    and (
+      (storage.foldername(name))[2] = auth.uid()::text
+      or public.role_rank(public.my_role(public.channel_server(((storage.foldername(name))[1])::uuid))) >= 2
+    )
+  );
+
 -- ---------------------------------------------------------------------
 -- PERMESSI DI ACCESSO ALLE TABELLE
 -- Nei progetti Supabase nuovi le tabelle non sono sempre aperte al sito:

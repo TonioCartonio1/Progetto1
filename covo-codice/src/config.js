@@ -2,5 +2,6 @@
 export const APP_NAME = 'Conv'
 export const APP_TAGLINE = 'Il posto dove la tua squadra si ritrova.'
 // Dimensione massima di un file allegato (in MB).
-// Sul piano gratuito di Supabase il limite reale è 50 MB: per i 100 MB serve il piano Pro.
-export const MAX_FILE_MB = 500
+// I file oltre 45 MB vengono divisi in pezzi automaticamente, così funziona anche il piano gratuito di Supabase
+// (che ha 1 GB di spazio in tutto: per questo il limite resta basso).
+export const MAX_FILE_MB = 200
