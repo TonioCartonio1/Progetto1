@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { errorText } from '../lib/format'
 import { APP_NAME, APP_TAGLINE } from '../config'
-import { Logo } from '../components/ui'
+import { Icon, Logo } from '../components/ui'
 
 export default function Login() {
   const [mode, setMode] = useState('login') // login | signup
@@ -39,7 +39,31 @@ export default function Login() {
   }
 
   return (
-    <div className="auth-page">
+    <div className="auth-page login-page">
+      <section className="login-hero" aria-hidden="true">
+        <div className="hero-mark">
+          <Logo size={56} />
+          <span>{APP_NAME}</span>
+        </div>
+        <p className="hero-line">Server, sale e voce per il tuo gruppo. Gratis, dal browser.</p>
+        <ol className="hero-thread">
+          <li className="bubble">
+            <span className="bubble-who" style={{ background: '#b388ff' }}>G</span>
+            <span><b>Giulia</b>Stasera chiamata alle 21?</span>
+          </li>
+          <li className="bubble">
+            <span className="bubble-who" style={{ background: '#4dd0e1' }}>M</span>
+            <span><b>Marco</b>Ci sono. Intanto vi mando il video</span>
+          </li>
+          <li className="bubble bubble-file">
+            <span className="bubble-who" style={{ background: '#4dd0e1' }}>M</span>
+            <span className="bubble-filecard"><Icon name="file" size={20} /> presentazione.mp4 <small>100 MB</small></span>
+          </li>
+          <li className="bubble bubble-voice">
+            <Icon name="volume" size={16} /> 3 persone nella sala vocale
+          </li>
+        </ol>
+      </section>
       <form className="auth-card" onSubmit={submit}>
         <div className="auth-brand">
           <Logo size={44} />

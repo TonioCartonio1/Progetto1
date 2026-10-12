@@ -5,10 +5,19 @@ import { Avatar, Icon, ProgressBar } from './ui'
 
 export default function Message({ message: m, grouped, mine, canDelete, onEdit, onDelete, flash }) {
   const [editing, setEditing] = useState(false)
+  const [open, setOpen] = useState(false) // su telefono: tocca il messaggio per vedere modifica/elimina
   const name = m.profiles?.display_name || 'Utente'
 
   return (
-    <article id={`msg-${m.id}`} className={`msg ${grouped ? 'grouped' : ''} ${flash ? 'flash' : ''}`}>
+    <article
+      id={`msg-${m.id}`}
+      className={`msg ${grouped ? 'grouped' : ''} ${flash ? 'flash' : ''} ${open ? 'open' : ''}`}
+      onClick={(e) => {
+        if (e.target.closest('button, a, video, textarea, input')) return
+        if (window.getSelection?.().toString()) return
+        setOpen((o) => !o)
+      }}
+    >
       <div className="msg-gutter">
         {grouped ? (
           <time className="msg-hover-time">{formatTime(m.created_at)}</time>

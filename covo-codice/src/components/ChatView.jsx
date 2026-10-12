@@ -86,6 +86,12 @@ export default function ChatView({ channel, myRole, membersMap, highlightId }) {
     return () => clearTimeout(t)
   }, [highlightId, messages === null]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // quando un'immagine finisce di caricare la chat si allunga: resta in fondo
+  const keepBottom = () => {
+    const el = listRef.current
+    if (el && stickRef.current) el.scrollTop = el.scrollHeight
+  }
+
   const onScroll = () => {
     const el = listRef.current
     stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
@@ -177,7 +183,13 @@ export default function ChatView({ channel, myRole, membersMap, highlightId }) {
       onDragLeave={(e) => e.currentTarget.contains(e.relatedTarget) || setDragging(false)}
       onDrop={onDrop}
     >
-      <div className="messages" ref={listRef} onScroll={onScroll}>
+      <div
+        className="messages"
+        ref={listRef}
+        onScroll={onScroll}
+        onLoadCapture={keepBottom}
+        onLoadedMetadataCapture={keepBottom}
+      >
         {messages === null && <p className="muted pad">Carico i messaggi…</p>}
         {messages?.length === 0 && (
           <div className="chat-welcome">
@@ -290,7 +302,7 @@ function Composer({ channel, onSend, onFile, busy }) {
           if (f) { e.preventDefault(); onFile(f) }
         }}
       />
-      <button className="icon-btn send" title="Invia" onClick={submit} disabled={!text.trim() || sending}>
+      <button className={`icon-btn send ${text.trim() ? 'ready' : ''}`} title="Invia" onClick={submit} disabled={!text.trim() || sending}>
         <Icon name="send" />
       </button>
     </div>

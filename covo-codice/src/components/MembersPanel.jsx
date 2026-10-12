@@ -8,7 +8,7 @@ export default function MembersPanel({ members, online, onClose }) {
   return (
     <aside className="members">
       <header className="members-head">
-        <span>Membri — {members.length}</span>
+        <span>{members.length} {members.length === 1 ? 'membro' : 'membri'}, {members.filter((m) => online.has(m.user_id)).length} online</span>
         <button className="icon-btn small" onClick={onClose} aria-label="Chiudi"><Icon name="x" size={15} /></button>
       </header>
       {ORDER.map((role) => {
@@ -18,7 +18,7 @@ export default function MembersPanel({ members, online, onClose }) {
         if (!list.length) return null
         return (
           <section key={role}>
-            <h3 className="members-group">{GROUP_LABEL[role]} — {list.length}</h3>
+            <h3 className="members-group">{GROUP_LABEL[role]} <span>{list.length}</span></h3>
             <ul>
               {list.map((m) => {
                 const on = online.has(m.user_id)
