@@ -30,6 +30,7 @@
 **Altro**
 - Si usa anche da telefono (menu a scomparsa).
 - Trascina un file nella chat, o incollalo, per caricarlo.
+- **Si installa come app** sul telefono e sul computer (icona sulla schermata Home, schermo intero), senza passare dagli store e senza costi.
 
 ## Cosa non funziona o è limitato
 

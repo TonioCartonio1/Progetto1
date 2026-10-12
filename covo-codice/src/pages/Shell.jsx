@@ -10,6 +10,7 @@ import ChatView from '../components/ChatView'
 import MembersPanel from '../components/MembersPanel'
 import VoiceRoom from '../components/VoiceRoom'
 import SearchModal from '../components/SearchModal'
+import InstallApp from '../components/InstallApp'
 import { VoiceSession } from '../lib/voice'
 import { ChannelModal, CreateServerModal, ProfileModal, ServerSettingsModal } from '../components/Modals'
 
@@ -282,6 +283,8 @@ export default function Shell() {
             ))}
             {channelsReady && channels.length === 0 && <li className="muted small pad">Nessuna sala visibile.</li>}
           </ul>
+
+          <InstallApp />
 
           {/* barra della voce, visibile ovunque mentre sei connesso */}
           {voice && voiceChannelId && (
