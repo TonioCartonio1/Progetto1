@@ -24,7 +24,7 @@ create table if not exists public.servers (
   name        text not null check (char_length(name) between 1 and 50),
   icon_url    text,
   owner_id    uuid not null references public.profiles(id) on delete cascade,
-  invite_code text not null unique default encode(gen_random_bytes(6), 'hex'),
+  invite_code text not null unique default substr(replace(gen_random_uuid()::text, '-', ''), 1, 12),
   created_at  timestamptz not null default now()
 );
 
@@ -173,7 +173,7 @@ returns text language plpgsql security definer set search_path = public as $$
 declare code text;
 begin
   if my_role(p_server) is distinct from 'admin' then raise exception 'Solo gli admin'; end if;
-  update servers set invite_code = encode(gen_random_bytes(6), 'hex') where id = p_server returning invite_code into code;
+  update servers set invite_code = substr(replace(gen_random_uuid()::text, '-', ''), 1, 12) where id = p_server returning invite_code into code;
   return code;
 end; $$;
 
@@ -345,3 +345,13 @@ create policy "conv voice read" on realtime.messages for select to authenticated
 drop policy if exists "conv voice write" on realtime.messages;
 create policy "conv voice write" on realtime.messages for insert to authenticated
   with check (realtime.messages.extension in ('broadcast', 'presence') and public.can_use_voice_topic(realtime.topic()));
+
+-- ---------------------------------------------------------------------
+-- PERMESSI DI ACCESSO ALLE TABELLE
+-- Nei progetti Supabase nuovi le tabelle non sono sempre aperte al sito:
+-- queste righe le aprono agli utenti registrati. Chi vede cosa resta
+-- deciso dalle regole di sicurezza (RLS) qui sopra.
+-- ---------------------------------------------------------------------
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant execute on all functions in schema public to authenticated;

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { canManageChannels, ROLE_LABEL } from '../lib/roles'
 import { APP_NAME } from '../config'
+import { errorText } from '../lib/format'
 import { Avatar, Icon, Logo, ServerIcon } from '../components/ui'
 import ChatView from '../components/ChatView'
 import MembersPanel from '../components/MembersPanel'
@@ -21,6 +22,7 @@ export default function Shell() {
   const [members, setMembers] = useState([])
   const [presence, setPresence] = useState({}) // userId -> [{ since, voice }]
   const [modal, setModal] = useState(null) // {type, ...}
+  const [loadError, setLoadError] = useState('')
   const [navOpen, setNavOpen] = useState(false)
   const [showMembers, setShowMembers] = useState(() => window.innerWidth > 1100)
 
@@ -40,20 +42,29 @@ export default function Shell() {
       .select('role, joined_at, servers(*)')
       .eq('user_id', user.id)
       .order('joined_at')
-    if (!error) setServers(data.filter((r) => r.servers).map((r) => ({ ...r.servers, role: r.role })))
+    if (error) {
+      console.error('server', error)
+      setLoadError(`Non riesco a caricare i server: ${errorText(error)}`)
+      setServers((prev) => prev || [])
+      return
+    }
+    setLoadError('')
+    setServers(data.filter((r) => r.servers).map((r) => ({ ...r.servers, role: r.role })))
   }, [user.id])
 
   const loadChannels = useCallback(async (sid) => {
-    const { data } = await supabase.from('channels').select('*').eq('server_id', sid).order('created_at')
+    const { data, error } = await supabase.from('channels').select('*').eq('server_id', sid).order('created_at')
+    if (error) { console.error('sale', error); setLoadError(`Non riesco a caricare le sale: ${errorText(error)}`) }
     setChannelsState({ serverId: sid, list: data || [] })
   }, [])
 
   const loadMembers = useCallback(async (sid) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('server_members')
       .select('user_id, role, joined_at, profiles(display_name, avatar_url)')
       .eq('server_id', sid)
       .order('joined_at')
+    if (error) { console.error('membri', error); setLoadError(`Non riesco a caricare i membri: ${errorText(error)}`) }
     setMembers(data || [])
   }, [])
 
@@ -171,6 +182,7 @@ export default function Shell() {
           <Logo size={56} />
           <h1>Benvenuto su {APP_NAME}, {profile?.display_name || 'amico'}!</h1>
           <p className="muted">Crea il tuo primo server, oppure apri un link d'invito che ti hanno mandato.</p>
+          {loadError && <div className="alert error">{loadError}</div>}
           <button className="btn primary block" onClick={() => setModal({ type: 'createServer' })}>Crea un server</button>
           <button className="link-muted" onClick={() => supabase.auth.signOut()}>Esci</button>
         </div>
@@ -322,6 +334,12 @@ export default function Shell() {
           </button>
         </header>
 
+        {loadError && (
+          <div className="alert error load-alert">
+            <span className="grow">{loadError}</span>
+            <button className="btn small" onClick={() => { setLoadError(''); loadServers(); if (serverId) { loadChannels(serverId); loadMembers(serverId) } }}>Riprova</button>
+          </div>
+        )}
         <div className="main-body">
           {channel?.kind === 'voice' ? (
             <VoiceRoom
