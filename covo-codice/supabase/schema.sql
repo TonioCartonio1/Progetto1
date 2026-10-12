@@ -355,3 +355,6 @@ create policy "conv voice write" on realtime.messages for insert to authenticate
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant execute on all functions in schema public to authenticated;
+
+-- Fa rileggere subito le tabelle al sito
+notify pgrst, 'reload schema';

@@ -54,3 +54,6 @@ create policy "conv voice read" on realtime.messages for select to authenticated
 drop policy if exists "conv voice write" on realtime.messages;
 create policy "conv voice write" on realtime.messages for insert to authenticated
   with check (realtime.messages.extension in ('broadcast', 'presence') and public.can_use_voice_topic(realtime.topic()));
+
+-- Fa rileggere subito le tabelle al sito
+notify pgrst, 'reload schema';

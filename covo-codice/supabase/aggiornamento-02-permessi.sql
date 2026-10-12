@@ -28,3 +28,6 @@ revoke execute on function public.reset_invite(uuid) from anon;
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant execute on all functions in schema public to authenticated;
+
+-- Fa rileggere subito le tabelle al sito
+notify pgrst, 'reload schema';
