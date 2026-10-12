@@ -119,6 +119,16 @@ returns boolean language sql stable security definer set search_path = public as
   )
 $$;
 
+-- Posso vedere una sala con questi dati? (controlla i valori della riga, così vale anche per sale appena create)
+create or replace function public.can_see_channel_row(sid uuid, prole text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from server_members m
+    where m.server_id = sid and m.user_id = auth.uid()
+      and (prole is null or role_rank(m.role) >= role_rank(prole))
+  )
+$$;
+
 create or replace function public.channel_server(cid uuid)
 returns uuid language sql stable security definer set search_path = public as $$
   select server_id from channels where id = cid
@@ -243,7 +253,7 @@ create policy members_delete on public.server_members for delete to authenticate
 
 -- Sale: le vede chi ha il ruolo giusto; le gestiscono moderatori e admin
 drop policy if exists channels_select on public.channels;
-create policy channels_select on public.channels for select to authenticated using (can_view_channel(id));
+create policy channels_select on public.channels for select to authenticated using (can_see_channel_row(server_id, private_role));
 drop policy if exists channels_insert on public.channels;
 create policy channels_insert on public.channels for insert to authenticated
   with check (
