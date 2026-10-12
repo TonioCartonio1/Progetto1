@@ -73,7 +73,7 @@ export default function SearchModal({ server, membersMap, onClose, onOpen }) {
                         <strong>{m.profiles?.display_name || 'Utente'}</strong>
                         <span className="muted small"># {m.channels?.name} · {formatDay(m.created_at)} {formatTime(m.created_at)}</span>
                       </div>
-                      {m.content && <p className="search-text">{highlight(decodeMentions(m.content, membersMap).text, term)}</p>}
+                      {m.content && <p className="search-text">{highlight(decodeMentions(m.content, membersMap).text.replace(/<event:[0-9a-f-]{36}>/g, '📅 evento'), term)}</p>}
                       {m.file_name && <p className="search-file"><Icon name="file" size={14} /> {highlight(m.file_name, term)}</p>}
                     </div>
                   </button>

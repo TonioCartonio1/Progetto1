@@ -12,6 +12,8 @@ import MembersPanel from '../components/MembersPanel'
 import VoiceRoom from '../components/VoiceRoom'
 import SearchModal from '../components/SearchModal'
 import InstallApp from '../components/InstallApp'
+import { EventModal, EventsView, NextEventStrip } from '../components/Events'
+import { EventsContext, categoryOf, eventState, formatWhenShort, useServerEvents } from '../lib/events'
 import { VoiceSession } from '../lib/voice'
 import { ChannelModal, CreateServerModal, ProfileModal, ServerSettingsModal } from '../components/Modals'
 
@@ -98,7 +100,7 @@ export default function Shell() {
     const preview = decodeMentions(m.content, L.membersMap).text.slice(0, 120)
     if (L.channelId !== m.channel_id) setMentionCounts((c) => ({ ...c, [m.channel_id]: (c[m.channel_id] || 0) + 1 }))
     const id = m.id
-    setToasts((t) => [...t.slice(-2), { id, who, channel: ch.name, preview, to: `/s/${L.serverId}/${m.channel_id}`, msgId: m.id }])
+    setToasts((t) => [...t.slice(-2), { id, icon: '@', title: `${who} ti ha menzionato in #${ch.name}`, preview, to: `/s/${L.serverId}/${m.channel_id}`, msgId: m.id }])
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 7000)
     try {
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && (document.hidden || !document.hasFocus())) {
@@ -194,6 +196,28 @@ export default function Shell() {
 
   const toggleMute = () => sessionRef.current?.setMuted(!sessionRef.current.muted)
 
+  // ---------- eventi del gruppo ----------
+  const onNewEvent = useCallback((ev) => {
+    const who = live.current.membersMap?.[ev.created_by]?.profiles?.display_name || 'Qualcuno'
+    const cat = categoryOf(ev.category)
+    const id = `ev-${ev.id}`
+    setToasts((t) => [...t.slice(-2), { id, icon: cat.emoji, title: `${who} ha creato un evento`, preview: `${ev.title}, ${formatWhenShort(ev.starts_at)}`, to: `/s/${ev.server_id}/eventi` }])
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 7000)
+  }, [])
+  const evs = useServerEvents(serverId, user.id, onNewEvent)
+  const onEventsPage = channelId === 'eventi'
+  const upcomingCount = evs.events.filter((e) => eventState(e) !== 'past').length
+
+  async function deleteEvent(ev) {
+    if (!window.confirm(`Eliminare l'evento "${ev.title}"?`)) return
+    try { await evs.remove(ev.id) } catch (e) { window.alert(e.message) }
+  }
+
+  async function announceEvent(saved, channelIdToAnnounce) {
+    if (!channelIdToAnnounce || !saved) return
+    await supabase.from('messages').insert({ channel_id: channelIdToAnnounce, user_id: user.id, content: `<event:${saved.id}>` })
+  }
+
   // esci dalla voce se cambi server o chiudi la pagina
   useEffect(() => () => leaveVoice(), [serverId, leaveVoice])
   // se la sala vocale sparisce (eliminata o resa privata), esci
@@ -211,6 +235,7 @@ export default function Shell() {
   useEffect(() => {
     if (!server || !channelsReady) return
     const first = channels.find((c) => c.kind !== 'voice') || channels[0]
+    if (channelId === 'eventi') return
     if ((!channelId || !channel) && first) navigate(`/s/${server.id}/${first.id}`, { replace: true })
   }, [server, channelsReady, channelId, channel, channels, navigate])
 
@@ -237,7 +262,15 @@ export default function Shell() {
     )
   }
 
+  const eventsValue = {
+    events: evs.events, rsvps: evs.rsvps, me: user.id, membersMap, myRole,
+    setRsvp: evs.setRsvp, save: evs.save,
+    onEdit: (ev) => setModal({ type: 'event', event: ev }),
+    onDelete: deleteEvent,
+  }
+
   return (
+    <EventsContext.Provider value={eventsValue}>
     <div className={`shell ${navOpen ? 'nav-open' : ''} ${showMembers ? 'members-open' : ''}`}>
       <div className="nav-scrim" onClick={() => setNavOpen(false)} />
 
@@ -275,6 +308,14 @@ export default function Shell() {
           {server && (
             <button className="invite-cta" onClick={() => setModal({ type: 'serverSettings' })}>
               <Icon name="link" size={16} /> Invita amici
+            </button>
+          )}
+
+          {evs.enabled && (
+            <button className={`channel-item events-link ${onEventsPage ? 'active' : ''}`} onClick={() => navigate(`/s/${serverId}/eventi`)}>
+              <Icon name="calendar" size={17} />
+              <span className="channel-name">Eventi</span>
+              {upcomingCount > 0 && <span className="events-badge">{upcomingCount}</span>}
             </button>
           )}
 
@@ -363,6 +404,12 @@ export default function Shell() {
           <button className="icon-btn mobile-only" onClick={() => setNavOpen(true)} aria-label="Apri menu">
             <Icon name="menu" />
           </button>
+          {onEventsPage && (
+            <>
+              <Icon name="calendar" className="muted" />
+              <h1 className="topbar-title">Eventi</h1>
+            </>
+          )}
           {channel && (
             <>
               <Icon name={channelIcon(channel)} className="muted" />
@@ -397,8 +444,11 @@ export default function Shell() {
             <button className="btn small" onClick={() => { setLoadError(''); loadServers(); if (serverId) { loadChannels(serverId); loadMembers(serverId) } }}>Riprova</button>
           </div>
         )}
+        {!onEventsPage && channel?.kind !== 'voice' && <NextEventStrip onOpen={() => navigate(`/s/${serverId}/eventi`)} />}
         <div className="main-body">
-          {channel?.kind === 'voice' ? (
+          {onEventsPage ? (
+            evs.enabled ? <EventsView onCreate={() => setModal({ type: 'event' })} /> : <div className="empty-chat"><p className="muted">Caricamento…</p></div>
+          ) : channel?.kind === 'voice' ? (
             <VoiceRoom
               channel={channel}
               voice={voiceChannelId === channel.id ? voice : null}
@@ -437,9 +487,9 @@ export default function Shell() {
               className="toast"
               onClick={() => { setToasts((x) => x.filter((y) => y.id !== t.id)); navigate(t.to, { state: { highlight: t.msgId, t: Date.now() } }) }}
             >
-              <span className="toast-at">@</span>
+              <span className="toast-at">{t.icon}</span>
               <span className="toast-body">
-                <strong>{t.who} ti ha menzionato in #{t.channel}</strong>
+                <strong>{t.title}</strong>
                 <span className="ellipsis">{t.preview}</span>
               </span>
             </button>
@@ -452,6 +502,14 @@ export default function Shell() {
           membersMap={membersMap}
           onClose={() => setModal(null)}
           onOpen={(m) => { setModal(null); navigate(`/s/${server.id}/${m.channel_id}`, { state: { highlight: m.id, t: Date.now() } }) }}
+        />
+      )}
+      {modal?.type === 'event' && (
+        <EventModal
+          event={modal.event}
+          textChannels={channels.filter((c) => c.kind !== 'voice')}
+          onClose={() => setModal(null)}
+          onSaved={announceEvent}
         />
       )}
       {modal?.type === 'profile' && <ProfileModal onClose={() => setModal(null)} onSaved={() => loadMembers(serverId)} />}
@@ -478,6 +536,7 @@ export default function Shell() {
         />
       )}
     </div>
+    </EventsContext.Provider>
   )
 }
 

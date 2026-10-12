@@ -30,8 +30,9 @@ Tutti e due sono già nel server **Conv Demo**, che contiene alcuni messaggi, un
 7. **Ricerca:** lente in alto a destra → cerca una parola. Cliccando un risultato si salta al messaggio.
 8. **Menzioni:** scrivi `@` nella chat e scegli una persona. Chi viene menzionato vede il messaggio evidenziato e, se è in un'altra sala, un avviso e un contatore rosso sulla sala. Con la campanella in alto si attivano anche le notifiche del sistema. Mentre qualcuno scrive, sotto la chat compare *"… sta scrivendo"*.
 9. **Reazioni:** passa sopra un messaggio (o toccalo, da telefono) e premi la faccina per aggiungere 👍 ❤️ 😂 😮 😢 🎉. Ripremi la reazione per toglierla.
-10. **Online:** il pallino verde e il pannello *Membri* mostrano chi è online in quel momento.
-11. **App:** da Chrome o Edge compare *Installa Conv come app* in basso a sinistra; su iPhone si usa Safari → Condividi → *Aggiungi alla schermata Home*.
+10. **Eventi:** a sinistra, sopra le sale, apri *Eventi* → *Nuovo evento* (es. ⚽ Calcetto giovedì alle 21, 10 posti, annuncialo in #generale). Rispondi *Ci sono / Forse / No* dalla sezione Eventi o direttamente dalla scheda in chat. In cima alla chat compare sempre il prossimo evento con il conto alla rovescia.
+11. **Online:** il pallino verde e il pannello *Membri* mostrano chi è online in quel momento.
+12. **App:** da Chrome o Edge compare *Installa Conv come app* in basso a sinistra; su iPhone si usa Safari → Condividi → *Aggiungi alla schermata Home*.
 
 ## 2. Avviarla sul proprio computer (facoltativo)
 

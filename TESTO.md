@@ -12,6 +12,14 @@
 - **GitHub**: conserva il codice.
 - Tecnologie: React + Vite; WebRTC per la voce.
 
+## Cosa ha Conv che Discord non ha
+
+Conv è pensato per i gruppi che **organizzano cose**: squadre, classi, amici, progetti.
+
+- **Eventi del gruppo** (sportivi e non: ⚽ sport, 🍕 uscite, 📚 studio, 🎮 giochi, 💼 riunioni): si crea l'evento con giorno, ora, luogo e posti, e ognuno risponde **Ci sono / Forse / No** con un tocco. C'è il **conto alla rovescia**, si vede chi partecipa, e quando i posti finiscono l'evento risulta **al completo** (controllato dal database, non solo dal sito).
+- L'evento si **annuncia in chat** come una scheda con i pulsanti per rispondere, e il **prossimo evento** resta sempre visibile in cima alla chat.
+- **File da 100 MB e più gratis**, senza piano a pagamento, e **app installabile** senza store.
+
 ## Cosa funziona
 
 **I sei requisiti**

@@ -3,6 +3,10 @@ import { formatBytes, formatTime } from '../lib/format'
 import { downloadParts, parseFilePath, saveBlob, signedUrl } from '../lib/upload'
 import { Avatar, Icon, ProgressBar } from './ui'
 import { decodeMentions, encodeMentions, nameOf, splitMentions } from '../lib/mentions'
+import { useEventsContext } from '../lib/events'
+import { EventCard } from './Events'
+
+const EVENT_RE = /^<event:([0-9a-f-]{36})>$/
 
 export const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉']
 
@@ -12,6 +16,7 @@ export default function Message({ message: m, grouped, mine, canDelete, onEdit, 
   const [picker, setPicker] = useState(false) // false | 'up' | 'down'
   const react = (e) => { onReact(e); setPicker(false); setOpen(false) }
   const name = m.profiles?.display_name || 'Utente'
+  const eventId = m.content?.match(EVENT_RE)?.[1]
 
   return (
     <article
@@ -44,6 +49,8 @@ export default function Message({ message: m, grouped, mine, canDelete, onEdit, 
             onCancel={() => setEditing(false)}
             onSave={async (t) => { await onEdit(m.id, t); setEditing(false) }}
           />
+        ) : eventId ? (
+          <EventInChat id={eventId} />
         ) : (
           m.content && (
             <p className="msg-text">
@@ -99,7 +106,7 @@ export default function Message({ message: m, grouped, mine, canDelete, onEdit, 
               )}
             </span>
           )}
-          {mine && m.content !== undefined && (
+          {mine && m.content !== undefined && !eventId && (
             <button className="icon-btn small" title="Modifica" onClick={() => setEditing(true)}><Icon name="pencil" size={15} /></button>
           )}
           {canDelete && (
@@ -209,6 +216,18 @@ function Attachment({ message: m }) {
           <Icon name="download" />
         </button>
       </div>
+    </div>
+  )
+}
+
+// Un evento annunciato in chat: la scheda con i pulsanti "Ci sono / Forse / No"
+function EventInChat({ id }) {
+  const ctx = useEventsContext()
+  const ev = ctx?.events.find((e) => e.id === id)
+  return (
+    <div className="event-in-chat">
+      <p className="event-announce"><Icon name="calendar" size={14} /> Ha creato un evento</p>
+      {ev ? <EventCard ev={ev} compact /> : <p className="muted small">Questo evento non è più disponibile.</p>}
     </div>
   )
 }
