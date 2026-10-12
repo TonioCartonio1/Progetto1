@@ -2,7 +2,7 @@
 
 **Squadra:** Tommaso Corradini (da solo)
 **Livello:** Pro
-**Link:** https://INSERIRE-LINK.vercel.app
+**Link:** https://progetto1-omega.vercel.app
 
 ## Strumenti usati
 

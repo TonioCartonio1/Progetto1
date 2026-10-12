@@ -6,7 +6,7 @@ Conv è una piattaforma di chat come Discord: server, sale di testo e vocali, me
 
 Non serve installare nulla: è online.
 
-**Link:** https://INSERIRE-LINK.vercel.app
+**Link:** https://progetto1-omega.vercel.app
 
 Funziona da computer e da telefono, con qualsiasi browser recente (Chrome, Edge, Firefox, Safari).
 
