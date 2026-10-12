@@ -25,7 +25,7 @@ export default function SearchModal({ server, membersMap, onClose, onOpen }) {
       const like = `%${safe}%`
       const { data, error } = await supabase
         .from('messages')
-        .select('id, content, file_name, created_at, user_id, channel_id, profiles(display_name, avatar_url), channels!inner(name, server_id)')
+        .select('id, content, file_name, created_at, user_id, channel_id, profiles!messages_user_id_fkey(display_name, avatar_url), channels!messages_channel_id_fkey!inner(name, server_id)')
         .eq('channels.server_id', server.id)
         .or(`content.ilike.${quote(like)},file_name.ilike.${quote(like)}`)
         .order('created_at', { ascending: false })

@@ -10,7 +10,9 @@ import { encodeMentions, mentionQuery, mentionsUser } from '../lib/mentions'
 import { typingText, useTyping } from '../lib/typing'
 import Message from './Message'
 
-const SELECT = '*, profiles(display_name, avatar_url)'
+// "!messages_user_id_fkey" dice al database quale collegamento usare per l'autore
+// (con le reazioni ce ne sono due possibili tra messaggi e persone)
+const SELECT = '*, profiles!messages_user_id_fkey(display_name, avatar_url)'
 
 export default function ChatView({ channel, myRole, membersMap, highlightId }) {
   const { user, profile } = useAuth()
