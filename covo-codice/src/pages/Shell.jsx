@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth'
 import { canManageChannels, ROLE_LABEL } from '../lib/roles'
 import { APP_NAME } from '../config'
 import { errorText } from '../lib/format'
+import { decodeMentions, mentionsUser } from '../lib/mentions'
 import { Avatar, Icon, Logo, ServerIcon } from '../components/ui'
 import ChatView from '../components/ChatView'
 import MembersPanel from '../components/MembersPanel'
@@ -26,6 +27,10 @@ export default function Shell() {
   const [presence, setPresence] = useState({}) // userId -> [{ since, voice }]
   const [modal, setModal] = useState(null) // {type, ...}
   const [loadError, setLoadError] = useState('')
+  const [mentionCounts, setMentionCounts] = useState({}) // id sala → menzioni non lette
+  const [toasts, setToasts] = useState([])
+  const [notifPerm, setNotifPerm] = useState(() => (typeof Notification === 'undefined' ? 'unsupported' : Notification.permission))
+  const live = useRef({}) // valori sempre aggiornati per i gestori in tempo reale
   const [navOpen, setNavOpen] = useState(false)
   const [showMembers, setShowMembers] = useState(() => window.innerWidth > 1100)
 
@@ -80,6 +85,41 @@ export default function Shell() {
   const myRole = members.find((m) => m.user_id === user.id)?.role || server?.role || 'member'
   const membersMap = useMemo(() => Object.fromEntries(members.map((m) => [m.user_id, m])), [members])
 
+  // ---------- menzioni: avviso quando qualcuno ti scrive @tuonome ----------
+  live.current = { channels: channelsState.list, channelId, membersMap, serverId, navigate }
+  const onIncoming = useCallback((m) => {
+    const L = live.current
+    if (m.user_id === user.id || !mentionsUser(m.content, user.id)) return
+    const ch = L.channels.find((c) => c.id === m.channel_id)
+    if (!ch) return
+    const viewing = L.channelId === m.channel_id && !document.hidden
+    if (viewing) return
+    const who = L.membersMap[m.user_id]?.profiles?.display_name || 'Qualcuno'
+    const preview = decodeMentions(m.content, L.membersMap).text.slice(0, 120)
+    if (L.channelId !== m.channel_id) setMentionCounts((c) => ({ ...c, [m.channel_id]: (c[m.channel_id] || 0) + 1 }))
+    const id = m.id
+    setToasts((t) => [...t.slice(-2), { id, who, channel: ch.name, preview, to: `/s/${L.serverId}/${m.channel_id}`, msgId: m.id }])
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 7000)
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && (document.hidden || !document.hasFocus())) {
+        const n = new Notification(`${who} ti ha menzionato in #${ch.name}`, { body: preview, icon: '/icons/icon-192.png', tag: m.id })
+        n.onclick = () => { window.focus(); L.navigate(`/s/${L.serverId}/${m.channel_id}`, { state: { highlight: m.id, t: Date.now() } }); n.close() }
+      }
+    } catch { /* alcuni browser non permettono notifiche da qui */ }
+  }, [user.id])
+
+  // aprendo una sala, le sue menzioni risultano lette
+  useEffect(() => {
+    if (channelId) setMentionCounts((c) => (c[channelId] ? { ...c, [channelId]: 0 } : c))
+  }, [channelId])
+
+  async function enableNotifications() {
+    try {
+      const r = await Notification.requestPermission()
+      setNotifPerm(r)
+    } catch { setNotifPerm('denied') }
+  }
+
   // ---------- tempo reale per il server aperto (sale, membri, presenza) ----------
   useEffect(() => {
     if (!serverId) return
@@ -92,13 +132,14 @@ export default function Shell() {
         loadServers()
         loadChannels(serverId) // un cambio di ruolo può mostrare/nascondere la sala privata
       })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, ({ new: m }) => onIncoming(m))
       .on('presence', { event: 'sync' }, () => setPresence({ ...rt.presenceState() }))
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') await rt.track({ since: Date.now(), voice: voiceChannelRef.current })
       })
     serverRtRef.current = rt
     return () => { serverRtRef.current = null; supabase.removeChannel(rt); setPresence({}) }
-  }, [serverId, user.id, loadChannels, loadMembers, loadServers])
+  }, [serverId, user.id, loadChannels, loadMembers, loadServers, onIncoming])
 
   // comunica agli altri in quale sala vocale sono (per mostrarlo nella lista)
   useEffect(() => {
@@ -251,6 +292,7 @@ export default function Shell() {
                 <button className={`channel-item ${c.id === channelId ? 'active' : ''}`} onClick={() => goChannel(c)}>
                   <Icon name={channelIcon(c)} size={17} />
                   <span className="channel-name">{c.name}</span>
+                  {mentionCounts[c.id] > 0 && <span className="mention-badge" title="Ti hanno menzionato">@{mentionCounts[c.id]}</span>}
                   {c.kind === 'voice' && c.private_role && <Icon name="lock" size={13} className="muted" />}
                   {canManageChannels(myRole) && (
                     <span
@@ -334,6 +376,11 @@ export default function Shell() {
           <span className="online-count" title="Persone online ora">
             <span className="dot" /> {members.filter((m) => online.has(m.user_id)).length} online
           </span>
+          {notifPerm === 'default' && (
+            <button className="icon-btn notif-btn" onClick={enableNotifications} title="Attiva le notifiche quando ti menzionano" aria-label="Attiva notifiche">
+              <Icon name="bell" />
+            </button>
+          )}
           {server && (
             <button className="icon-btn" onClick={() => setModal({ type: 'search' })} aria-label="Cerca nei messaggi" title="Cerca nei messaggi">
               <Icon name="search" />
@@ -382,9 +429,27 @@ export default function Shell() {
       {modal?.type === 'createServer' && (
         <CreateServerModal onClose={() => setModal(null)} onCreated={async (sid) => { await loadServers(); navigate(`/s/${sid}`) }} />
       )}
+      {toasts.length > 0 && (
+        <div className="toasts" role="status">
+          {toasts.map((t) => (
+            <button
+              key={t.id}
+              className="toast"
+              onClick={() => { setToasts((x) => x.filter((y) => y.id !== t.id)); navigate(t.to, { state: { highlight: t.msgId, t: Date.now() } }) }}
+            >
+              <span className="toast-at">@</span>
+              <span className="toast-body">
+                <strong>{t.who} ti ha menzionato in #{t.channel}</strong>
+                <span className="ellipsis">{t.preview}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       {modal?.type === 'search' && server && (
         <SearchModal
           server={server}
+          membersMap={membersMap}
           onClose={() => setModal(null)}
           onOpen={(m) => { setModal(null); navigate(`/s/${server.id}/${m.channel_id}`, { state: { highlight: m.id, t: Date.now() } }) }}
         />

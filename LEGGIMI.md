@@ -28,8 +28,9 @@ Tutti e due sono già nel server **Conv Demo**, che contiene alcuni messaggi, un
 5. **Inviti:** ingranaggio → *Invita persone* → copia il link. Chi lo apre entra nel server.
 6. **Sala vocale:** entra in *Vocale* da due dispositivi diversi (es. computer e telefono) e consenti il microfono. Chi parla si illumina di verde.
 7. **Ricerca:** lente in alto a destra → cerca una parola. Cliccando un risultato si salta al messaggio.
-8. **Online:** il pallino verde e il pannello *Membri* mostrano chi è online in quel momento.
-9. **App:** da Chrome o Edge compare *Installa Conv come app* in basso a sinistra; su iPhone si usa Safari → Condividi → *Aggiungi alla schermata Home*.
+8. **Menzioni:** scrivi `@` nella chat e scegli una persona. Chi viene menzionato vede il messaggio evidenziato e, se è in un'altra sala, un avviso e un contatore rosso sulla sala. Con la campanella in alto si attivano anche le notifiche del sistema. Mentre qualcuno scrive, sotto la chat compare *"… sta scrivendo"*.
+9. **Online:** il pallino verde e il pannello *Membri* mostrano chi è online in quel momento.
+10. **App:** da Chrome o Edge compare *Installa Conv come app* in basso a sinistra; su iPhone si usa Safari → Condividi → *Aggiungi alla schermata Home*.
 
 ## 2. Avviarla sul proprio computer (facoltativo)
 

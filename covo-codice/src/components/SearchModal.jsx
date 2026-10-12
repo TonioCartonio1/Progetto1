@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { errorText, formatDay, formatTime } from '../lib/format'
 import { Avatar, Icon, Modal } from './ui'
+import { decodeMentions } from '../lib/mentions'
 
 // Cerca nei messaggi di tutte le sale del server che puoi vedere
 // (le sale private restano escluse grazie alle regole del database).
-export default function SearchModal({ server, onClose, onOpen }) {
+export default function SearchModal({ server, membersMap, onClose, onOpen }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -72,7 +73,7 @@ export default function SearchModal({ server, onClose, onOpen }) {
                         <strong>{m.profiles?.display_name || 'Utente'}</strong>
                         <span className="muted small"># {m.channels?.name} · {formatDay(m.created_at)} {formatTime(m.created_at)}</span>
                       </div>
-                      {m.content && <p className="search-text">{highlight(m.content, term)}</p>}
+                      {m.content && <p className="search-text">{highlight(decodeMentions(m.content, membersMap).text, term)}</p>}
                       {m.file_name && <p className="search-file"><Icon name="file" size={14} /> {highlight(m.file_name, term)}</p>}
                     </div>
                   </button>

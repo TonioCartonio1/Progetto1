@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { formatBytes, formatTime } from '../lib/format'
 import { downloadParts, parseFilePath, saveBlob, signedUrl } from '../lib/upload'
 import { Avatar, Icon, ProgressBar } from './ui'
+import { decodeMentions, encodeMentions, nameOf, splitMentions } from '../lib/mentions'
 
-export default function Message({ message: m, grouped, mine, canDelete, onEdit, onDelete, flash }) {
+export default function Message({ message: m, grouped, mine, canDelete, onEdit, onDelete, flash, mentioned, membersMap }) {
   const [editing, setEditing] = useState(false)
   const [open, setOpen] = useState(false) // su telefono: tocca il messaggio per vedere modifica/elimina
   const name = m.profiles?.display_name || 'Utente'
@@ -11,7 +12,7 @@ export default function Message({ message: m, grouped, mine, canDelete, onEdit, 
   return (
     <article
       id={`msg-${m.id}`}
-      className={`msg ${grouped ? 'grouped' : ''} ${flash ? 'flash' : ''} ${open ? 'open' : ''}`}
+      className={`msg ${grouped ? 'grouped' : ''} ${flash ? 'flash' : ''} ${open ? 'open' : ''} ${mentioned ? 'mentioned' : ''}`}
       onClick={(e) => {
         if (e.target.closest('button, a, video, textarea, input')) return
         if (window.getSelection?.().toString()) return
@@ -35,13 +36,18 @@ export default function Message({ message: m, grouped, mine, canDelete, onEdit, 
         {editing ? (
           <EditBox
             initial={m.content}
+            membersMap={membersMap}
             onCancel={() => setEditing(false)}
             onSave={async (t) => { await onEdit(m.id, t); setEditing(false) }}
           />
         ) : (
           m.content && (
             <p className="msg-text">
-              {m.content}
+              {splitMentions(m.content).map((part, i) =>
+                typeof part === 'string'
+                  ? part
+                  : <span key={i} className="mention-chip">@{nameOf(membersMap, part.id)}</span>
+              )}
               {m.edited_at && <span className="edited"> (modificato)</span>}
             </p>
           )
@@ -63,7 +69,10 @@ export default function Message({ message: m, grouped, mine, canDelete, onEdit, 
   )
 }
 
-function EditBox({ initial, onSave, onCancel }) {
+function EditBox({ initial: raw, membersMap, onSave: save0, onCancel }) {
+  // nella casella le menzioni si vedono come "@Nome"; al salvataggio tornano <@id>
+  const [{ text: initial, map }] = useState(() => decodeMentions(raw, membersMap))
+  const onSave = (t) => save0(encodeMentions(t, map))
   const [text, setText] = useState(initial)
   const ref = useRef(null)
   useEffect(() => { ref.current?.focus() }, [])

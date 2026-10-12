@@ -1,17 +1,20 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { canModerate } from '../lib/roles'
 import { errorText, formatBytes, formatDay } from '../lib/format'
 import { removeAttachment, uploadAttachment } from '../lib/upload'
 import { MAX_FILE_MB } from '../config'
-import { Icon, ProgressBar } from './ui'
+import { Avatar, Icon, ProgressBar } from './ui'
+import { encodeMentions, mentionQuery, mentionsUser } from '../lib/mentions'
+import { typingText, useTyping } from '../lib/typing'
 import Message from './Message'
 
 const SELECT = '*, profiles(display_name, avatar_url)'
 
 export default function ChatView({ channel, myRole, membersMap, highlightId }) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
+  const typing = useTyping(channel.id, user, profile)
   const [messages, setMessages] = useState(null)
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
@@ -208,6 +211,8 @@ export default function ChatView({ channel, myRole, membersMap, highlightId }) {
               <Message
                 message={m}
                 flash={m.id === flashId}
+                mentioned={mentionsUser(m.content, user.id)}
+                membersMap={membersMap}
                 grouped={grouped}
                 mine={m.user_id === user.id}
                 canDelete={m.user_id === user.id || moderator}
@@ -242,7 +247,16 @@ export default function ChatView({ channel, myRole, membersMap, highlightId }) {
         </div>
       )}
 
-      <Composer channel={channel} onSend={send} onFile={startUpload} busy={Boolean(upload)} />
+      <div className="typing-line" aria-live="polite">
+        {typing.typers.length > 0 && (
+          <>
+            <span className="typing-dots" aria-hidden="true"><i /><i /><i /></span>
+            <span><b>{typingText(typing.typers)}</b>…</span>
+          </>
+        )}
+      </div>
+
+      <Composer channel={channel} onSend={send} onFile={startUpload} busy={Boolean(upload)} membersMap={membersMap} typing={typing} />
 
       {dragging && (
         <div className="drop-overlay">
@@ -253,58 +267,133 @@ export default function ChatView({ channel, myRole, membersMap, highlightId }) {
   )
 }
 
-function Composer({ channel, onSend, onFile, busy }) {
+function Composer({ channel, onSend, onFile, busy, membersMap, typing }) {
+  const { user } = useAuth()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
+  const [mq, setMq] = useState(null) // menzione in corso: { query, start }
+  const [sel, setSel] = useState(0)
+  const picked = useRef({}) // nome → id delle persone scelte dal menu @
   const fileRef = useRef(null)
   const taRef = useRef(null)
+  const caretRef = useRef(null) // dove rimettere il cursore dopo aver scelto un nome
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const ta = taRef.current
     if (!ta) return
     ta.style.height = 'auto'
     ta.style.height = Math.min(ta.scrollHeight, 180) + 'px'
+    if (caretRef.current !== null) {
+      ta.focus()
+      ta.setSelectionRange(caretRef.current, caretRef.current)
+      caretRef.current = null
+    }
   }, [text])
 
+  // elenco delle persone che corrispondono a quello che si scrive dopo @
+  const suggestions = useMemo(() => {
+    if (!mq) return []
+    const q = mq.query.trim().toLowerCase()
+    return Object.values(membersMap || {})
+      .filter((m) => m.user_id !== user.id && m.profiles?.display_name)
+      .map((m) => ({ id: m.user_id, name: m.profiles.display_name, avatar: m.profiles.avatar_url }))
+      .filter((m) => !q || m.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)) || m.name.toLowerCase().startsWith(q))
+      .slice(0, 6)
+  }, [mq, membersMap, user.id])
+
+  const updateMention = (value, caret) => {
+    const found = mentionQuery(value, caret)
+    setMq(found)
+    setSel(0)
+  }
+
+  function choose(m) {
+    const ta = taRef.current
+    const caret = ta?.selectionStart ?? text.length
+    const before = text.slice(0, mq.start)
+    const after = text.slice(caret)
+    const insert = `@${m.name} `
+    picked.current[m.name] = m.id
+    caretRef.current = before.length + insert.length
+    setText(before + insert + after.replace(/^ /, ''))
+    setMq(null)
+  }
+
   async function submit() {
-    const content = text.trim()
+    const content = encodeMentions(text.trim(), picked.current)
     if (!content || sending) return
     setSending(true)
     const ok = await onSend(content)
     setSending(false)
-    if (ok) setText('')
+    if (ok) { setText(''); picked.current = {}; setMq(null); typing.stop() }
     taRef.current?.focus()
   }
 
+  const open = mq && suggestions.length > 0
+
   return (
-    <div className="composer">
-      <button className="icon-btn" title="Carica un file" onClick={() => fileRef.current?.click()} disabled={busy}>
-        <Icon name="clip" />
-      </button>
-      <input
-        ref={fileRef}
-        type="file"
-        hidden
-        onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = '' }}
-      />
-      <textarea
-        ref={taRef}
-        rows={1}
-        value={text}
-        maxLength={4000}
-        placeholder={`Scrivi in #${channel.name}`}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit() }
-        }}
-        onPaste={(e) => {
-          const f = e.clipboardData?.files?.[0]
-          if (f) { e.preventDefault(); onFile(f) }
-        }}
-      />
-      <button className={`icon-btn send ${text.trim() ? 'ready' : ''}`} title="Invia" onClick={submit} disabled={!text.trim() || sending}>
-        <Icon name="send" />
-      </button>
+    <div className="composer-wrap">
+      {open && (
+        <ul className="mention-menu" role="listbox" aria-label="Menziona qualcuno">
+          {suggestions.map((m, i) => (
+            <li key={m.id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={i === sel}
+                className={i === sel ? 'on' : ''}
+                onMouseDown={(e) => { e.preventDefault(); choose(m) }}
+                onMouseEnter={() => setSel(i)}
+              >
+                <Avatar id={m.id} name={m.name} url={m.avatar} size={24} />
+                <span>{m.name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="composer">
+        <button className="icon-btn" title="Carica un file" onClick={() => fileRef.current?.click()} disabled={busy}>
+          <Icon name="clip" />
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          hidden
+          onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = '' }}
+        />
+        <textarea
+          ref={taRef}
+          rows={1}
+          value={text}
+          maxLength={3800}
+          placeholder={`Scrivi in #${channel.name} (usa @ per menzionare)`}
+          onChange={(e) => {
+            const v = e.target.value
+            setText(v)
+            updateMention(v, e.target.selectionStart)
+            if (v.trim()) typing.ping(); else typing.stop()
+          }}
+          onClick={(e) => updateMention(text, e.target.selectionStart)}
+          onBlur={() => setTimeout(() => setMq(null), 120)}
+          onKeyDown={(e) => {
+            if (open) {
+              if (e.key === 'ArrowDown') { e.preventDefault(); setSel((i) => (i + 1) % suggestions.length); return }
+              if (e.key === 'ArrowUp') { e.preventDefault(); setSel((i) => (i - 1 + suggestions.length) % suggestions.length); return }
+              if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); choose(suggestions[sel]); return }
+              if (e.key === 'Escape') { e.preventDefault(); setMq(null); return }
+            }
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit() }
+          }}
+          onPaste={(e) => {
+            const f = e.clipboardData?.files?.[0]
+            if (f) { e.preventDefault(); onFile(f) }
+          }}
+        />
+        <button className={`icon-btn send ${text.trim() ? 'ready' : ''}`} title="Invia" onClick={submit} disabled={!text.trim() || sending}>
+          <Icon name="send" />
+        </button>
+      </div>
     </div>
   )
 }

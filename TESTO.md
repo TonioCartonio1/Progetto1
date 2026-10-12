@@ -26,9 +26,11 @@
 - **Presenza online/offline** in tempo reale (pallino verde e pannello membri).
 - **Sala vocale** gratuita: l'audio va direttamente tra i browser; mostra chi parla e chi ha il microfono spento; si resta connessi anche cambiando sala di testo.
 - **Ricerca nei messaggi** di tutto il server (anche nei nomi dei file), con salto al messaggio trovato. Rispetta le sale private.
+- **Menzioni @nome con notifica:** scrivendo @ compare l'elenco dei membri; chi viene menzionato vede il messaggio evidenziato, un contatore sulla sala, un avviso sullo schermo e, se le ha attivate (campanella in alto), la notifica del sistema.
 
 **Altro**
 - Si usa anche da telefono (menu a scomparsa).
+- **"Sta scrivendo…"** sotto la chat, in tempo reale (anche questo segnale rispetta le sale private).
 - Trascina un file nella chat, o incollalo, per caricarlo.
 - **Si installa come app** sul telefono e sul computer (icona sulla schermata Home, schermo intero), senza passare dagli store e senza costi.
 
