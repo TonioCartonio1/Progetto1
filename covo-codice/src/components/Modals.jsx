@@ -187,9 +187,10 @@ export function ChannelModal({ server, channel, myRole, onClose, onDone }) {
   async function remove() {
     if (!window.confirm(channel.kind === 'voice' ? `Eliminare la sala vocale ${channel.name}?` : `Eliminare #${channel.name} e tutti i suoi messaggi?`)) return
     setBusy(true)
-    const { error } = await supabase.from('channels').delete().eq('id', channel.id)
+    const { data, error } = await supabase.from('channels').delete().eq('id', channel.id).select('id')
     setBusy(false)
     if (error) return setError(errorText(error))
+    if (!data?.length) return setError('Non hai il permesso di eliminare questa sala.')
     onClose()
     onDone(null)
   }
@@ -275,8 +276,9 @@ export function ServerSettingsModal({ server, myRole, members, onClose, onChange
     try {
       const patch = { name: name.trim() }
       if (icon.file) patch.icon_url = await uploadPublicImage(icon.file, user.id)
-      const { error } = await supabase.from('servers').update(patch).eq('id', server.id)
+      const { data, error } = await supabase.from('servers').update(patch).eq('id', server.id).select('id')
       if (error) throw error
+      if (!data?.length) throw new Error('Solo gli admin possono modificare il server.')
       await onChanged()
     } catch (err) {
       setError(errorText(err))
@@ -287,30 +289,35 @@ export function ServerSettingsModal({ server, myRole, members, onClose, onChange
 
   async function setRole(uid, role) {
     setError('')
-    const { error } = await supabase.from('server_members').update({ role }).eq('server_id', server.id).eq('user_id', uid)
+    const { data, error } = await supabase.from('server_members').update({ role }).eq('server_id', server.id).eq('user_id', uid).select('user_id')
     if (error) return setError(errorText(error))
+    if (!data?.length) return setError('Non hai il permesso di cambiare questo ruolo.')
     onChanged()
   }
 
   async function kick(m) {
     if (!window.confirm(`Rimuovere ${m.profiles?.display_name} dal server?`)) return
-    const { error } = await supabase.from('server_members').delete().eq('server_id', server.id).eq('user_id', m.user_id)
+    const { data, error } = await supabase.from('server_members').delete().eq('server_id', server.id).eq('user_id', m.user_id).select('user_id')
     if (error) return setError(errorText(error))
+    if (!data?.length) return setError('Non hai il permesso di rimuovere questo membro.')
     onChanged()
   }
 
   async function leave() {
     if (!window.confirm(`Uscire da ${server.name}?`)) return
-    const { error } = await supabase.from('server_members').delete().eq('server_id', server.id).eq('user_id', user.id)
+    const { data, error } = await supabase.from('server_members').delete().eq('server_id', server.id).eq('user_id', user.id).select('user_id')
     if (error) return setError(errorText(error))
+    if (!data?.length) return setError('Non è stato possibile uscire dal server.')
     onLeft()
   }
 
   async function destroy() {
-    const typed = window.prompt(`Per eliminare il server scrivi il suo nome: ${server.name}`)
-    if (typed !== server.name) return
-    const { error } = await supabase.from('servers').delete().eq('id', server.id)
+    if (!window.confirm(`Eliminare il server "${server.name}"?\n\nVerranno cancellati per sempre tutte le sale, i messaggi e i membri.`)) return
+    setBusy(true); setError('')
+    const { data, error } = await supabase.from('servers').delete().eq('id', server.id).select('id')
+    setBusy(false)
     if (error) return setError(errorText(error))
+    if (!data?.length) return setError('Non è stato possibile eliminare il server: solo chi l\'ha creato può farlo.')
     onLeft()
   }
 
@@ -385,7 +392,7 @@ export function ServerSettingsModal({ server, myRole, members, onClose, onChange
 
         <section className="settings-block danger-zone">
           {isOwner ? (
-            <button className="btn ghost-danger" onClick={destroy}><Icon name="trash" size={16} /> Elimina server</button>
+            <button className="btn ghost-danger" onClick={destroy} disabled={busy}><Icon name="trash" size={16} /> Elimina server</button>
           ) : (
             <button className="btn ghost-danger" onClick={leave}><Icon name="logout" size={16} /> Esci dal server</button>
           )}

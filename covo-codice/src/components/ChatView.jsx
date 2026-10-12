@@ -93,15 +93,17 @@ export default function ChatView({ channel, myRole, membersMap }) {
   }
 
   async function edit(id, content) {
-    const { error } = await supabase.from('messages').update({ content }).eq('id', id)
+    const { data, error } = await supabase.from('messages').update({ content }).eq('id', id).select('id')
     if (error) return setError(errorText(error))
+    if (!data?.length) return setError('Non hai il permesso di modificare questo messaggio.')
     setMessages((ms) => ms.map((x) => (x.id === id ? { ...x, content, edited_at: new Date().toISOString() } : x)))
   }
 
   async function remove(m) {
     if (!window.confirm('Eliminare questo messaggio?')) return
-    const { error } = await supabase.from('messages').delete().eq('id', m.id)
+    const { data, error } = await supabase.from('messages').delete().eq('id', m.id).select('id')
     if (error) return setError(errorText(error))
+    if (!data?.length) return setError('Non hai il permesso di eliminare questo messaggio.')
     setMessages((ms) => ms.filter((x) => x.id !== m.id))
   }
 
