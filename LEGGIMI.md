@@ -12,12 +12,14 @@ Funziona da computer e da telefono, con qualsiasi browser recente (Chrome, Edge,
 
 ### Account di prova
 
-| Ruolo  | Email              | Password      |
-|--------|--------------------|---------------|
-| Admin  | admin@conv.test    | INSERIRE      |
-| Membro | membro@conv.test   | INSERIRE      |
+| Ruolo  | Email              | Password         |
+|--------|--------------------|------------------|
+| Admin  | admin@conv.test    | admin@conv.test  |
+| Membro | membro@conv.test   | membro@conv.test |
 
-Tutti e due sono già nel server **Conv Demo**, che contiene alcuni messaggi, un file da 100 MB, la sala privata **staff** e una sala **Vocale**.
+La password è uguale all'email. Sono account di prova con dati finti.
+
+Tutti e due sono già nel server **Conv Demo**, che contiene alcuni messaggi, un file da 100 MB, degli eventi, la sala privata **staff** e una sala **Vocale**.
 
 ### Cosa provare (in 5 minuti)
 
@@ -45,7 +47,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Nel file `.env` vanno inseriti indirizzo e chiave **pubblica** del database:
+Il file `.env` contiene già indirizzo e chiave **pubblica** del database:
 
 ```
 VITE_SUPABASE_URL=https://yoaspkbomypdludtvqew.supabase.co
